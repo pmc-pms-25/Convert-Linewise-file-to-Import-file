@@ -1,0 +1,32 @@
+﻿CONVERT MTO - Piping / Structural / EIT
+=======================================
+
+Trong thư mục này
+-----------------
+- Convert MTO.exe   : bấm đúp để mở tool trong cửa sổ riêng (dùng Microsoft Edge có sẵn, chạy được khi không có mạng).
+- Convert MTO.html  : cùng tool, mở bằng trình duyệt (Edge / Chrome). Cần mạng để tải thư viện đọc Excel.
+- TuDien_Cot.xlsx   : từ điển cột của phần Piping. Sửa file này rồi nạp vào tool ở tab "PIP · Từ điển cột" > "Nạp từ TuDien_Cot.xlsx".
+Bản online (link claude.ai) cũng là tool này.
+
+Cách dùng
+---------
+1. Chọn tab: Piping (PIP) / Structural (STR) / EIT / Bảng config & tra cứu.
+2. Chọn file MTO -> xem bảng "Cách map cột" -> Convert -> "Tải file kết quả".
+   - Piping: ra template Import 36 cột (FabricationType, UnitDiaInch theo NEW Typical, Quantity).
+   - STR: ra template StructuralMTOMaster (sheet DATA), WorkGroup tra theo config.
+   - EIT: chọn loại Support / Tray-Ladder / Equipment / Tubing / Cable; tool tự điền DisciplineType theo loại;
+          mỗi loại có nút tải template input.
+3. Ô tô hồng = không điền được, lý do ở cột "Remark convert". Xóa các cột phụ màu xám trước khi nạp hệ thống.
+
+Cập nhật dữ liệu tra cứu
+------------------------
+- Config WorkGroup, sys_project_list, sys_facility_list thay đổi: tab "Bảng config & tra cứu" > "Cập nhật từ file Excel..."
+  (chọn 1 hoặc nhiều file cùng lúc). NEW Typical: tab "PIP · Cài đặt & Typical".
+- Dữ liệu cập nhật được lưu trên máy (bản exe và bản HTML lưu riêng). "Dùng bản nhúng sẵn" để quay về dữ liệu gốc.
+
+Ghi chú bản exe
+---------------
+- Lần chạy đầu, exe giải nén trang tool vào %LOCALAPPDATA%\ConvertMTO; exe mới thì tự cập nhật.
+- Máy không có Edge thì mở bằng Chrome; không có cả hai thì mở bằng trình duyệt mặc định.
+- Gửi exe cho người khác, Windows có thể cảnh báo (exe không có chữ ký số): bấm "More info" > "Run anyway".
+- File chỉ được xử lý trên máy, không gửi đi đâu.

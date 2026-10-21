@@ -1,0 +1,880 @@
+<title>Convert MTO Import</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column — file strip, mapping sheet (table + settings rail), result. Pipe-shop palette: steel neutrals, teal accent, semantic amber/red/pink matching the Excel highlight colours. */
+:root{
+  --bg:#f2f4f5; --surface:#ffffff; --sunk:#e8ecee; --ink:#17222a; --muted:#5a6872; --line:#d3dade;
+  --accent:#0b6e69; --accent-ink:#ffffff; --accent-soft:#d9eeec;
+  --ok:#2c7a3f; --ok-soft:#dff0e3; --warn:#9a5b00; --warn-soft:#fbecd3; --bad:#b3261e; --bad-soft:#f8dfdd;
+  --auto:#2b5f9e; --auto-soft:#e0eaf7;
+  --xl-yellow:#ffff00; --xl-orange:#ffc000; --xl-pink:#ffc7ce;
+  --f-display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10171b; --surface:#172126; --sunk:#0c1215; --ink:#e3eaed; --muted:#97a8b1; --line:#2b3940;
+  --accent:#4cc2b8; --accent-ink:#06201e; --accent-soft:#143836;
+  --ok:#7fd193; --ok-soft:#173222; --warn:#f0b05a; --warn-soft:#38290f; --bad:#f2867d; --bad-soft:#3b1b19;
+  --auto:#8db8ee; --auto-soft:#172a42; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#10171b; --surface:#172126; --sunk:#0c1215; --ink:#e3eaed; --muted:#97a8b1; --line:#2b3940;
+  --accent:#4cc2b8; --accent-ink:#06201e; --accent-soft:#143836;
+  --ok:#7fd193; --ok-soft:#173222; --warn:#f0b05a; --warn-soft:#38290f; --bad:#f2867d; --bad-soft:#3b1b19;
+  --auto:#8db8ee; --auto-soft:#172a42; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14.5px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:0 64px}
+h1,h2,h3{font-family:var(--f-display);font-stretch:85%;text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(26px,4vw,40px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:21px;font-weight:700}
+h3{font-size:16px;font-weight:700}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{padding-block:28px 18px;display:grid;gap:10px}
+header.top .lede{max-width:78ch;color:var(--muted)}
+.flow{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.flow b{color:var(--ink);font-weight:500;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:2px 8px}
+
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);display:flex;gap:2px;overflow-x:auto;padding-block:6px 0}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:8px 14px 9px;cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+section.tab{padding-block:20px 0;display:grid;gap:18px}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.panel>.ph{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+.panel>.pb{padding:16px}
+.step{font-family:var(--f-mono);font-size:12px;color:var(--accent);font-weight:500;margin-right:8px}
+
+.drop{display:grid;grid-template-columns:auto 1fr auto;gap:14px 18px;align-items:center;border:1.5px dashed var(--line);border-radius:8px;padding:16px;background:var(--sunk)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .pipe{width:46px;height:46px}
+.drop .fname{font-weight:600;word-break:break-all}
+@media (max-width:640px){.drop{grid-template-columns:1fr}.drop .pipe{display:none}}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn[disabled]{opacity:.45;cursor:not-allowed;filter:none}
+.btn.small{padding:5px 10px;font-size:13px;font-weight:500}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+
+.banner{border-radius:8px;padding:12px 16px;display:grid;gap:6px;border:1px solid}
+.banner.bad{background:var(--bad-soft);border-color:var(--bad);color:var(--ink)}
+.banner.bad h3{color:var(--bad)}
+.banner.info{background:var(--accent-soft);border-color:var(--accent)}
+.banner.warn{background:var(--warn-soft);border-color:var(--warn)}
+.banner ul{margin:0;padding-left:20px}
+.banner code{font-family:var(--f-mono);font-size:12.5px;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+
+.mapgrid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+@media (max-width:980px){.mapgrid{grid-template-columns:minmax(0,1fr)}}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--f-mono);font-size:12px;border-radius:999px;padding:2px 10px;background:var(--sunk);border:1px solid var(--line);color:var(--muted)}
+.chip b{color:var(--ink);font-weight:500}
+
+.tscroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface);position:sticky;top:0}
+td.t{font-family:var(--f-mono);font-size:13px;white-space:nowrap}
+td.t small{display:block;color:var(--muted);font-family:var(--f-body);font-size:11.5px}
+tr.helper td{background:var(--sunk)}
+tr.req td{background:var(--bad-soft)}
+.maptable select{width:100%;min-width:180px;max-width:340px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--surface)}
+.maptable select.manual{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.pill{display:inline-block;font-size:12px;border-radius:4px;padding:1px 8px;font-weight:500;line-height:1.55}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.auto{background:var(--auto-soft);color:var(--auto)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.req{background:var(--bad);color:#fff}
+.pill.none{background:var(--sunk);color:var(--muted)}
+.pill.man{background:var(--accent-soft);color:var(--accent)}
+
+.rail{display:grid;gap:14px}
+.field{display:grid;gap:5px}
+.field label,.lbl{font-size:12.5px;font-weight:600;color:var(--muted)}
+.field select,.field input,.inp{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);width:100%}
+.field .hint{font-size:12px;color:var(--muted)}
+.inline{display:flex;gap:8px;align-items:center}
+.inline input[type=number]{width:72px}
+.preview{font-family:var(--f-mono);font-size:12px;background:var(--sunk);border-radius:5px;padding:6px 8px;word-break:break-all}
+.preview b{color:var(--accent);font-weight:500}
+.consts{display:grid;grid-template-columns:1fr;gap:8px}
+.consts .row{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px;align-items:center}
+.consts .row span{font-family:var(--f-mono);font-size:12px}
+.consts input.need{border-color:var(--warn);background:var(--warn-soft)}
+
+.runbar{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between}
+.progress{flex:1 1 260px;height:8px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:2px;background:var(--surface)}
+.tile .n{font-family:var(--f-display);font-stretch:85%;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.tile .k{font-size:12.5px;color:var(--muted)}
+.tile .sw{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:6px;border:1px solid var(--line)}
+.sw.y{background:var(--xl-yellow)}.sw.o{background:var(--xl-orange)}.sw.p{background:var(--xl-pink)}
+.restable{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:6px}
+.restable td{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+.restable td.num{text-align:right}
+
+.dicttable input[type=text]{width:100%;min-width:260px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;background:var(--surface);font-family:var(--f-mono);font-size:12.5px}
+.dicttable td.c{text-align:center}
+.dicttable td.note{color:var(--muted);font-size:12.5px;min-width:220px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;align-items:start}
+.fabgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+.fabgrid label{display:grid;grid-template-columns:1fr 54px;gap:6px;align-items:center;font-family:var(--f-mono);font-size:12.5px;border:1px solid var(--line);border-radius:5px;padding:4px 4px 4px 8px}
+.fabgrid input{padding:3px 5px;border:1px solid var(--line);border-radius:4px;width:100%;background:var(--surface)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:13.5px;z-index:20;max-width:calc(100% - 32px)}
+.spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.navsep{flex:0 0 1px;background:var(--line);margin:8px 6px}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{display:grid;gap:1px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:8px 14px;cursor:pointer;min-width:132px}
+.seg button small{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.seg button b{font-weight:600}
+.seg button[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.typecard{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 18px;background:var(--sunk);border-radius:7px;padding:12px 14px}
+.typecard .k{font-size:12px;font-weight:600;color:var(--muted)}
+.typecard .v{font-family:var(--f-mono);font-size:13px}
+.filters{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end}
+.filters .field{min-width:130px}
+.chk{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);white-space:nowrap}
+ol.steps{margin:0;padding-left:20px;display:grid;gap:6px}
+td.pk{background:var(--xl-pink);color:#17222a}
+td.rk{color:var(--bad);font-weight:600}
+.restable td.wrap{white-space:normal;min-width:200px}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}.progress i{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">PMS · Workfront · Piping / Structural / EIT</span>
+    <h1>Convert MTO</h1>
+    <p class="lede">Chọn bộ môn, chọn file MTO do DE nhập, kiểm tra cách map cột rồi tải file kết quả. Piping ra template Import 36 cột (tính FabricationType, UnitDiaInch theo NEW Typical). Structural ra template StructuralMTOMaster, EIT ra layout mtoc_eit_mto_master; cả hai tự điền WorkGroup theo bảng config. File chỉ được xử lý trong trình duyệt của bạn, không gửi đi đâu.</p>
+    <div class="flow"><b>1 · Chọn file</b>→<b>2 · Kiểm tra map cột</b>→<b>3 · Convert &amp; tải file</b></div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-convert" aria-selected="true" data-tab="convert">Piping (PIP)</button>
+    <button role="tab" id="tab-str" aria-selected="false" data-tab="str">Structural (STR)</button>
+    <button role="tab" id="tab-eit" aria-selected="false" data-tab="eit">EIT</button>
+    <button role="tab" id="tab-lookup" aria-selected="false" data-tab="lookup">Bảng config &amp; tra cứu</button>
+    <span class="navsep" aria-hidden="true"></span>
+    <button role="tab" id="tab-dict" aria-selected="false" data-tab="dict">PIP · Từ điển cột</button>
+    <button role="tab" id="tab-settings" aria-selected="false" data-tab="settings">PIP · Cài đặt &amp; Typical</button>
+  </nav>
+
+  <!-- ============ CONVERT ============ -->
+  <section class="tab" id="sec-convert">
+    <div class="panel">
+      <div class="ph"><h2><span class="step">01</span>Chọn file MTO</h2><span class="muted" id="typInfo"></span></div>
+      <div class="pb">
+        <label class="drop" id="drop" for="fileIn">
+          <svg class="pipe" viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="18" width="26" height="12" rx="1" fill="var(--line)"/><path d="M30 16h6a8 8 0 0 1 8 8v20h-12V28h-2z" fill="var(--accent)"/><rect x="28" y="14" width="4" height="20" fill="var(--muted)"/><rect x="31" y="42" width="15" height="4" fill="var(--muted)"/></svg>
+          <div style="min-width:0;display:grid;gap:2px">
+            <span class="fname" id="fname">Kéo-thả file vào đây hoặc bấm để chọn</span>
+            <span class="muted" id="fmeta">.xlsx · .xlsm · .xls · .csv</span>
+          </div>
+          <span class="btn primary">Chọn file…</span>
+        </label>
+        <input type="file" id="fileIn" accept=".xlsx,.xlsm,.xls,.csv,.txt" hidden>
+      </div>
+    </div>
+
+    <div id="sampleNote" class="banner info"><p><b>Đang hiển thị dữ liệu ví dụ</b>: 7 dòng giả lập dạng file AVEVA (có 1 dòng WELD bị bỏ qua, 1 OLET lệch UnitDiaInch) để bạn thấy cách tool map và tính. Chọn file của bạn ở trên để bắt đầu.</p></div>
+    <div id="errBox" class="banner bad" hidden></div>
+
+    <div class="panel" id="mapPanel">
+      <div class="ph">
+        <h2><span class="step">02</span>Kiểm tra map cột</h2>
+        <div class="chips" id="mapChips"></div>
+      </div>
+      <div class="pb mapgrid">
+        <div class="tscroll" style="max-height:640px;overflow:auto;border:1px solid var(--line);border-radius:6px">
+          <table class="maptable"><thead><tr><th>Cột đích</th><th>Cột nguồn trong file</th><th>Xử lý</th></tr></thead><tbody id="mapBody"></tbody></table>
+        </div>
+        <div class="rail">
+          <div class="field"><label for="selSheet">Sheet dữ liệu</label><select id="selSheet"></select><span class="hint" id="sheetHint"></span></div>
+          <div class="field"><label for="inHdr">Dòng tiêu đề</label><div class="inline"><input type="number" id="inHdr" min="1" max="10" class="inp"><span class="hint">tự dò trong 10 dòng đầu</span></div></div>
+          <div class="field"><label for="selSize">Size trong file</label><select id="selSize"><option value="mm">mm</option><option value="mm25">mm/25 (nhân 25 ra mm)</option></select><span class="hint" id="sizeHint"></span></div>
+          <div class="field"><label for="selPipe">Số lượng ống khi không có cột chiều dài</label><select id="selPipe"><option value="m">đã là m (giữ nguyên)</option><option value="mm">là mm (chia 1000)</option></select></div>
+          <div class="field"><label for="inSys">System = phần thứ N của Line_No (tách bằng "-")</label><div class="inline"><input type="number" id="inSys" min="0" max="15" class="inp"><span class="hint">0 = không tách</span></div><div class="preview" id="sysPrev"></div></div>
+          <div class="field"><span class="lbl">Giá trị điền vào khi ô trống</span><div class="consts" id="consts"></div><span class="hint">Để trống thì ô giữ trống và được tô hồng trong file kết quả.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2><span class="step">03</span>Convert &amp; tải file</h2></div>
+      <div class="pb" style="display:grid;gap:16px">
+        <div class="runbar">
+          <button class="btn primary" id="btnRun">Convert</button>
+          <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+          <span class="muted mono" id="runMsg">Sẵn sàng</span>
+        </div>
+        <div id="result" hidden style="display:grid;gap:16px">
+          <div class="tiles" id="tiles"></div>
+          <div class="btns"><button class="btn primary" id="btnSave">Tải file Import (.xlsx)</button><span class="muted" id="saveHint" style="align-self:center"></span></div>
+          <div style="display:grid;gap:8px">
+            <h3 id="comboTitle">Tổ hợp lệch / thiếu trong NEW Typical</h3>
+            <div class="restable"><table><thead><tr><th>Category</th><th>Size1</th><th>Size2</th><th>Size3</th><th>Typical</th><th>Trong file</th><th>Trạng thái</th><th>Số dòng</th></tr></thead><tbody id="comboBody"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STR / EIT (filled by script) ============ -->
+  <section class="tab" id="sec-str" hidden></section>
+  <section class="tab" id="sec-eit" hidden></section>
+
+  <!-- ============ LOOKUP ============ -->
+  <section class="tab" id="sec-lookup" hidden>
+    <div class="panel">
+      <div class="ph"><h2>Nguồn dữ liệu tra cứu</h2>
+        <div class="btns"><button class="btn small" id="lkLoad">Cập nhật từ file Excel…</button><button class="btn small" id="lkReset">Dùng bản nhúng sẵn</button><input type="file" id="lkFile" accept=".xlsx,.xlsm,.xls" multiple hidden></div>
+      </div>
+      <div class="pb" style="display:grid;gap:10px">
+        <div class="tiles" id="lkTiles"></div>
+        <p class="muted" style="font-size:13px">Chọn 1 hoặc nhiều file cùng lúc: <span class="mono">plan_config_work_group</span>, <span class="mono">sys_project_list</span>, <span class="mono">sys_facility_list</span>. Trang tự nhận loại file theo tên cột ở dòng 1. Bản cập nhật được lưu trong trình duyệt này và dùng ngay cho STR và EIT.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2>Cách tra WorkGroup</h2></div>
+      <div class="pb two">
+        <ol class="steps">
+          <li><b>ProjectCode → ProjectType</b> theo sys_project_list (vd BB → OG, FORMOSA4 → WF).</li>
+          <li><b>ProjectCode + FacilityCode → FacilityType</b> theo sys_facility_list (vd BB + CPP TOPSIDE → TS).</li>
+          <li><b>WorkGroupName</b>: STR lấy cột WorkGroupName trong file; EIT không có cột này nên suy theo loại vật tư (bảng bên phải).</li>
+          <li>Tra config theo <b>DisciplineCode + ProjectType + FacilityType + WorkGroupName</b> → WorkGroupCode. STR ghi 3 số (001), EIT ghi số trơn (5).</li>
+          <li>Không tra được → WorkGroup để trống, tô hồng, ghi lý do ở cột <span class="mono">Remark convert</span>. Tên có nhiều mã trong config cũng để trống.</li>
+        </ol>
+        <div class="tscroll"><table><thead><tr><th>Loại EIT</th><th>Điều kiện</th><th>ELE</th><th>INS</th></tr></thead><tbody id="lkRule"></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2>Bảng config WorkGroup</h2><span class="muted" id="wgCount"></span></div>
+      <div class="pb" style="display:grid;gap:12px">
+        <div class="filters">
+          <div class="field"><label for="wgDisc">Discipline</label><select id="wgDisc"></select></div>
+          <div class="field"><label for="wgPT">ProjectType</label><select id="wgPT"></select></div>
+          <div class="field"><label for="wgFT">FacilityType</label><select id="wgFT"></select></div>
+          <div class="field" style="flex:1 1 220px"><label for="wgQ">Tìm tên / mã</label><input id="wgQ" class="inp" placeholder="vd Primary Beams, Tray"></div>
+          <label class="chk"><input type="checkbox" id="wgDup"> Chỉ tên trùng nhiều mã</label>
+        </div>
+        <div class="restable" style="max-height:520px"><table><thead><tr><th>Discipline</th><th>ProjectType</th><th>FacilityType</th><th>Mã</th><th>WorkGroupName</th><th>IsActive</th><th>Ghi chú</th></tr></thead><tbody id="wgBody"></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <div class="ph"><h2>Project → ProjectType</h2><input id="pjQ" class="inp" style="max-width:200px" placeholder="Tìm project" aria-label="Tìm project"></div>
+        <div class="pb"><div class="restable"><table><thead><tr><th>Code</th><th>Tên</th><th>ProjectType</th></tr></thead><tbody id="pjBody"></tbody></table></div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>Facility → FacilityType</h2><div class="inline"><input id="fcQ" class="inp" style="max-width:200px" placeholder="Tìm project / facility" aria-label="Tìm facility"><label class="chk"><input type="checkbox" id="fcNull"> Chỉ thiếu type</label></div></div>
+        <div class="pb"><div class="restable"><table><thead><tr><th>Project</th><th>Facility</th><th>Group</th><th>FacilityType</th></tr></thead><tbody id="fcBody"></tbody></table></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2>Location: tên đầy đủ → mã</h2></div>
+      <div class="pb" style="display:grid;gap:10px">
+        <div class="tscroll"><table><thead><tr><th>Tên đầy đủ trong file</th><th>Mã</th><th>Nguồn</th></tr></thead><tbody id="locBody"></tbody></table></div>
+        <p class="muted" style="font-size:13px">Ô Location đã là mã thì giữ nguyên. Tên không có trong bảng → Location để trống, tô hồng, remark "Không đổi được tên đầy đủ thành mã"; tên gốc giữ ở cột phụ "Location (tên đầy đủ)".</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DICTIONARY ============ -->
+  <section class="tab" id="sec-dict" hidden>
+    <div class="banner info"><p>Mỗi dòng là 1 cột của template Import. Ghi các tên cột có thể gặp trong file nguồn, cách nhau bằng dấu <code>;</code>. Tool dùng tên tìm thấy đầu tiên (ưu tiên từ trái sang); không phân biệt hoa thường. Gặp file có tên cột mới thì thêm tên đó vào đây, thay đổi được lưu trong trình duyệt này và áp dụng ngay.</p></div>
+    <div class="panel">
+      <div class="ph"><h2>Từ điển cột nguồn → cột đích</h2>
+        <div class="btns"><button class="btn small" id="dictLoad">Nạp từ TuDien_Cot.xlsx</button><button class="btn small" id="dictSave">Tải TuDien_Cot.xlsx</button><button class="btn small" id="dictReset">Khôi phục mặc định</button><input type="file" id="dictFile" accept=".xlsx" hidden></div>
+      </div>
+      <div class="pb tscroll"><table class="dicttable"><thead><tr><th>Cột đích</th><th>Tên cột nguồn có thể gặp</th><th>Bắt buộc</th><th>Ô trống lấy cột kế</th><th>Ghi chú</th></tr></thead><tbody id="dictBody"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="tab" id="sec-settings" hidden>
+    <div class="two">
+      <div class="panel">
+        <div class="ph"><h2>NEW Typical</h2></div>
+        <div class="pb" style="display:grid;gap:12px">
+          <p id="typDetail"></p>
+          <div class="btns"><button class="btn small" id="typLoad">Cập nhật từ Working_Nguyen.xlsx</button><button class="btn small" id="typReset">Dùng bản nhúng sẵn</button><input type="file" id="typFile" accept=".xlsx,.xlsm" hidden></div>
+          <p class="muted" style="font-size:13px">Đọc sheet <span class="mono">NEW Typical</span>, cột A–H: MaterialCategory, Size1–3 (mm), DiaInch1–3, UnitDiaInch. Key = Category + các size khác 0.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>Quy tắc chung</h2></div>
+        <div class="pb" style="display:grid;gap:12px">
+          <div class="field"><label for="cfgSkip">MaterialCategory bỏ qua (cách nhau bằng ;)</label><input id="cfgSkip" class="inp mono"></div>
+          <div class="field"><label for="cfgMm25">Hệ số khi size ghi dạng mm/25</label><input id="cfgMm25" type="number" step="0.1" class="inp mono"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>FabricationType theo MaterialCategory</h2><button class="btn small" id="fabAdd">Thêm loại</button></div>
+      <div class="pb"><div class="fabgrid" id="fabGrid"></div><p class="muted" style="font-size:13px;margin-top:10px">1 fitting (tính UnitDiaInch) · 2 ống · 3 van/thiết bị · 4 gasket · 5 khác. Loại không có trong bảng thì lấy cột FabricationType của file (nếu có).</p></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/*DATA*/
+</script>
+<script>
+"use strict";
+// ---------------------------------------------------------------- constants
+const IMPORT_HEADERS=['ProjectCode','GroupFacilityCode','FacilityCode','IsSubContractor','Line_No','System','MaterialCode','MaterialType','Class','MaterialCategory','ItemDescription','MaterialDescription','Size1','Size2','Size3','SCH1','SCH2','Rating','Quantity','Unit','UnitDiaInch','TotalDiaInch','UnitWeight','TotalWeight','Scope','MaterialGroup','FabricationType','Remark','SITE','ZONE','BRAN','NAME','REF','FullName','Priority','ROSFinalDate'];
+const HELPERS=['_LENGTH_MM','_DE_UNITDIA','_SPEC'];
+const HELPER_LABEL={_LENGTH_MM:'Chiều dài ống (mm)',_DE_UNITDIA:'UnitDiaInch có sẵn',_SPEC:'Spec'};
+const CODE_COLS=['ProjectCode','GroupFacilityCode','FacilityCode','IsSubContractor','Scope'];
+const PINK_IDX=[0,1,2,3,4,5,18,24,26];
+const MISS_TYP='Thiếu trong Typical', MISS_DE='Thiếu giá trị DE';
+const DEFAULT_DICT=[
+ ['ProjectCode','ProjectCode; Project Code',0,0,'Không có thì nhập ở phần thiết lập'],
+ ['GroupFacilityCode','GroupFacilityCode; Group Facility Code',0,0,'Không có thì nhập ở phần thiết lập'],
+ ['FacilityCode','FacilityCode; Facility Code',0,0,'Không có thì nhập ở phần thiết lập'],
+ ['IsSubContractor','IsSubContractor',0,0,'Không có thì nhập ở phần thiết lập'],
+ ['Line_No','Line_No; LineNo; Line No; CorrectLineno; PIPE',1,0,''],
+ ['System','System; Correctsystem',0,0,'Không có thì tách từ Line_No (phần thứ N)'],
+ ['MaterialCode','MaterialCode; Material Code; ITEMCODE; Item Code',0,1,'Ô Material Code trống thì lấy ITEMCODE'],
+ ['MaterialType','MaterialType; Material Type; Correctmaterialtype',0,0,''],
+ ['Class','Class; Type of material; SPEC OF SPRE; SPEC',0,0,'Bỏ dấu "/" ở đầu'],
+ ['MaterialCategory','MaterialCategory; TYPE',1,0,''],
+ ['ItemDescription','ItemDescription; DTXR',0,0,''],
+ ['MaterialDescription','MaterialDescription; MTXX',0,0,''],
+ ['Size1','Size1; P1BORE',1,0,'Đơn vị mm; file ghi mm/25 (vd BB) thì chọn nhân 25'],
+ ['Size2','Size2; P2BORE',0,0,''],
+ ['Size3','Size3; P3BORE',0,0,''],
+ ['SCH1','SCH1; SCH',0,0,''],
+ ['SCH2','SCH2',0,0,''],
+ ['Rating','Rating',0,0,''],
+ ['Quantity','Quantity; QUAN; QUANTITY; QTY',1,0,'Ống (Fab 2) ưu tiên lấy chiều dài / 1000'],
+ ['Unit','Unit; UOM',0,0,'Trống thì ống = m, còn lại = pcs'],
+ ['UnitDiaInch','',0,0,'Tool tự tính theo NEW Typical (chỉ Fab 1); Fab khác = 0'],
+ ['TotalDiaInch','',0,0,'Tool tự tính = Quantity × UnitDiaInch'],
+ ['UnitWeight','UnitWeight',0,0,''],
+ ['TotalWeight','TotalWeight',0,0,''],
+ ['Scope','Scope',0,0,'Không có thì nhập ở phần thiết lập'],
+ ['MaterialGroup','MaterialGroup; Correctmaterialgroup',0,0,'Trống thì suy từ Spec: có "APE" = Non metalic'],
+ ['FabricationType','FabricationType; CorrectFabtype',0,0,'Tool tính theo MaterialCategory; chỉ dùng cột nguồn khi loại không có trong bảng'],
+ ['Remark','Remark',0,0,''],
+ ['SITE','SITE',0,0,''],['ZONE','ZONE',0,0,''],['BRAN','BRAN; BRANCH',0,0,''],['NAME','NAME',0,0,''],['REF','REF',0,0,''],
+ ['FullName','FullName; FLNAME; BRANCH; NAME',0,0,''],
+ ['Priority','Priority',0,0,''],['ROSFinalDate','ROSFinalDate',0,0,''],
+ ['_LENGTH_MM','ITLENG (mm); ITLENG; TUB LENGHT (mm); TUB LENGTH (mm); Length (mm)',0,0,'(Cột phụ) Chiều dài ống mm → Quantity ống = /1000'],
+ ['_DE_UNITDIA','UnitDiaInch; Unit Dia',0,0,'(Cột phụ) UnitDiaInch có sẵn trong file → đối chiếu với NEW Typical'],
+ ['_SPEC','SPEC OF SPRE; SPEC; Class',0,0,'(Cột phụ) Spec để suy MaterialGroup']
+].map(([t,syn,req,fb,note])=>({t,syn,req:!!req,fb:!!fb,note}));
+const DEFAULT_CFG={skip:'WELD',mm25:25};
+const DEFAULT_FAB={BEND:1,CAP:1,COUP:1,ELBO:1,FLAN:1,FTUB:1,OLET:1,REDU:1,TEE:1,UNIO:1,TUBI:2,INST:3,VALV:3,GASK:4,ATTA:5,FBLI:5,FILT:5,PCOM:5};
+const BASE_MM=[6,8,10,15,20,25,32,40,50,65,80,90,100,125,150,200,250,300,350,400,450,500,550,600,650,700,750,800,900,1000,1050,1200];
+const SAMPLE_ROWS=[
+ ['SITE','ZONE','PIPE','BRANCH','TYPE','SPEC','DTXR','P1BORE','P2BORE','P3BORE','QUANTITY','ITLENG','MATERIAL CODE','Unit Dia'],
+ ['/KMA-PIPING','/KMA-Z01','/50-CO-64002-11490X','/50-CO-64002-11490X/B1','FLAN','/LTCS-A1','FLANGE WN RF 150#','50mm','50mm','0mm',1,null,'PF1RDSL00L2F0-3400',2],
+ ['/KMA-PIPING','/KMA-Z01','/50-CO-64002-11490X','/50-CO-64002-11490X/B1','TUBI','/LTCS-A1','PIPE BE SCH 80','50mm','0mm','0mm',null,1144.4,'PPI00SL00L2F0-1200',null],
+ ['/KMA-PIPING','/KMA-Z01','/50-CO-64002-11490X','/50-CO-64002-11490X/B1','ELBO','/LTCS-A1','ELBOW 90 LR BW','50mm','50mm','0mm',2,null,'PE2B0SL00L2F0-2200',4],
+ ['/KMA-PIPING','/KMA-Z01','/80-CO-64010-11490X','/80-CO-64010-11490X/B1','TEE','/LTCS-A1','TEE RED BW','80mm','80mm','50mm',1,null,'PT3B0SL00L2F0-2200',8],
+ ['/KMA-PIPING','/KMA-Z01','/80-CO-64010-11490X','/80-CO-64010-11490X/B1','OLET','/LTCS-A1','SOCKOLET 3000#','80mm','80mm','20mm',1,null,'PB6NN0000L2F0-3300',0.75],
+ ['/KMA-PIPING','/KMA-Z01','/80-CO-64010-11490X','/80-CO-64010-11490X/B1','GASK','/LTCS-A1','GASKET SW 150#','80mm','80mm','0mm',1,null,'PG4RA0000L2M0-1400',null],
+ ['/KMA-PIPING','/KMA-Z01','/80-CO-64010-11490X','/80-CO-64010-11490X/B1','WELD','/LTCS-A1','','80mm','0mm','0mm',1,null,'',null]
+];
+
+// ---------------------------------------------------------------- storage
+function ls(k,v){try{if(v===undefined){const s=localStorage.getItem('cvimp.'+k);return s?JSON.parse(s):null}localStorage.setItem('cvimp.'+k,JSON.stringify(v))}catch(e){return null}}
+function lsDel(k){try{localStorage.removeItem('cvimp.'+k)}catch(e){}}
+const S={
+  dict:ls('dict')||structuredClone(DEFAULT_DICT),
+  cfg:Object.assign({},DEFAULT_CFG,ls('cfg')||{}),
+  fab:ls('fab')||Object.assign({},DEFAULT_FAB),
+  typ:ls('typ')||{rows:TYPICAL,src:'bản nhúng sẵn (NEW Typical 2026-10-12)'},
+  file:null, sheets:[], cur:-1, result:null, sample:true
+};
+let TYP=new Map(), MMSET=new Set();
+function buildTypical(){
+  TYP=new Map(); MMSET=new Set(BASE_MM);
+  for(const r of S.typ.rows){
+    const cat=String(r[0]??'').trim().toUpperCase(); if(!cat) continue;
+    const sz=[sizeNum(r[1]),sizeNum(r[2]),sizeNum(r[3])]; sz.forEach(x=>{if(x!=null)MMSET.add(x)});
+    let u=num(r[7]); if(u==null&&cat==='FTUB')u=0;
+    const k=sizeKey(cat,sz); if(u!=null&&!TYP.has(k)) TYP.set(k,u);
+  }
+  const t=`NEW Typical: ${TYP.size} tổ hợp · ${S.typ.src}`;
+  $('#typInfo').textContent=t; $('#typDetail').textContent=t;
+}
+
+// ---------------------------------------------------------------- helpers
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm=s=>String(s??'').replace(/^﻿/,'').trim().replace(/\s+/g,' ').toUpperCase();
+function str(v){if(v==null)return'';let x=typeof v==='number'?String(Number(v.toPrecision(15))):String(v).trim();return(x==='NULL'||x==='unset')?'':x}
+function num(v){if(v==null)return null;if(typeof v==='number')return isFinite(v)?v:null;let x=String(v).trim().replace(/\s*(mm|kg|m)$/i,'');if(!x||x==='NULL'||x==='unset')return null;if(!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(x))return null;return parseFloat(x)}
+function sizeNum(v){const n=num(v);return(n==null||n===0)?null:n}
+const sizeKey=(cat,s)=>cat+s.filter(x=>x!=null).map(String).join('');
+const r6=x=>Math.round(x*1e6)/1e6, r2=x=>Math.round(x*100)/100;
+function colLetter(n){let s='';while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s}
+const tick=()=>new Promise(r=>setTimeout(r,0));
+let toastT; function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3800)}
+const fmt=n=>Number(n).toLocaleString('vi-VN');
+const synList=d=>[...new Set(String(d.syn||'').split(';').map(norm).filter(Boolean))];
+const dictOf=t=>S.dict.find(d=>d.t===t)||{t,syn:'',req:false,fb:false,note:''};
+const labelOf=t=>HELPER_LABEL[t]?`(phụ) ${HELPER_LABEL[t]}`:t;
+
+// ---------------------------------------------------------------- reading
+async function readWorkbook(file){
+  const buf=await file.arrayBuffer();
+  if(/\.(csv|txt)$/i.test(file.name)){
+    const text=new TextDecoder('utf-8').decode(buf);
+    return XLSX.read(text,{type:'string',raw:true});
+  }
+  return XLSX.read(buf,{type:'array',cellFormula:false,cellHTML:false,cellText:false,cellStyles:false});
+}
+function sheetsFrom(wb){
+  const out=[];
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name]; if(!ws||!ws['!ref']) continue;
+    const rg=XLSX.utils.decode_range(ws['!ref']);
+    const nrows=rg.e.r+1; if(nrows<2) continue;
+    const top=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:true,range:{s:{r:0,c:0},e:{r:Math.min(rg.e.r,11),c:rg.e.c}}});
+    out.push({name,ws,top,nrows,rows:null,override:{},hdrFixed:null});
+  }
+  return out;
+}
+function fullRows(sh){
+  if(!sh.rows) sh.rows=sh.ws?XLSX.utils.sheet_to_json(sh.ws,{header:1,raw:true,defval:null,blankrows:true}):sh.top;
+  return sh.rows;
+}
+
+// ---------------------------------------------------------------- mapping
+function detect(sh){
+  const top=sh.top; let best=null;
+  const lim=Math.min(10,top.length-1);
+  const tries=sh.hdrFixed!=null?[sh.hdrFixed]:[...Array(Math.max(lim,1)).keys()];
+  for(const hr of tries){
+    const r=top[hr]||[]; const names=new Map(), raw={}, cols=[];
+    for(let c=0;c<r.length;c++){const x=norm(r[c]);if(x){cols.push(c);if(!names.has(x)){names.set(x,c);raw[c]=String(r[c]).trim()}}}
+    const auto={}; let score=0;
+    for(const d of S.dict){let cs=[...new Set(synList(d).filter(s=>names.has(s)).map(s=>names.get(s)))];if(cs.length>1&&!d.fb)cs=[cs[0]];auto[d.t]=cs;if(cs.length)score++}
+    if(!best||score>best.score) best={hr,auto,score,raw,cols};
+  }
+  sh.det=best; return best;
+}
+function effMap(sh){
+  const m={}; const det=sh.det;
+  for(const d of S.dict){const o=sh.override[d.t];m[d.t]=o===undefined?det.auto[d.t]:(o<0?[]:[o])}
+  for(const t of [...IMPORT_HEADERS,...HELPERS]) if(!m[t]) m[t]=[];
+  return m;
+}
+function missReq(sh){const m=effMap(sh);return S.dict.filter(d=>d.req&&!m[d.t].length).map(d=>d.t)}
+function mapStatus(t,sh){
+  const m=effMap(sh)[t], src=m.map(c=>sh.det.raw[c]??colLetter(c+1)).join(' → '), man=sh.override[t]!==undefined;
+  if(t==='UnitDiaInch')return['Tool tính theo NEW Typical (Fab 1), Fab khác = 0','auto'];
+  if(t==='TotalDiaInch')return['Tool tính = Quantity × UnitDiaInch','auto'];
+  if(t==='FabricationType')return['Tool tính theo MaterialCategory','auto'];
+  if(m.length){let s=man?'Chọn tay':'OK';if(m.length>1)s+=' · ô trống lấy cột kế';if(t==='Class')s+=' · bỏ "/" đầu';return[s,man?'man':'ok',src]}
+  if(dictOf(t).req)return['THIẾU · cột bắt buộc','req'];
+  if(t==='System')return['Không có → tách từ Line_No (phần thứ N)','warn'];
+  if(CODE_COLS.includes(t))return['Không có → nhập giá trị ở bên phải','warn'];
+  if(t==='MaterialGroup')return['Không có → suy từ Spec (APE = Non metalic)','auto'];
+  if(t==='Unit')return['Không có → ống = m, còn lại = pcs','auto'];
+  if(t==='_LENGTH_MM')return['Không có → ống lấy theo Quantity','warn'];
+  if(t==='_DE_UNITDIA')return['Không có → không đối chiếu UnitDiaInch','none'];
+  return['Không có → để trống','none'];
+}
+function guessModes(sh){
+  const m=effMap(sh), rows=fullRows(sh), hr=sh.det.hr, c=m.Size1[0];
+  let sMm=0,s25=0,txt=false;
+  if(c!=null) for(let r=hr+1;r<Math.min(rows.length,hr+3001);r++){
+    const v=(rows[r]||[])[c]; if(typeof v==='string'&&/mm\s*$/i.test(v)){txt=true;break}
+    const x=sizeNum(v); if(x==null)continue; if(MMSET.has(x))sMm++; if(MMSET.has(r2(x*S.cfg.mm25)))s25++;
+  }
+  sh.sizeMode=(!txt&&s25>sMm)?'mm25':'mm';
+  sh.sizeWhy=txt?'Giá trị có chữ "mm"':`Khớp chuẩn mm: ${sMm} · khớp mm/25: ${s25}`;
+  sh.pipeMode=m.Unit.length?'m':'mm';
+  if(sh.sysPart==null) sh.sysPart=0;
+}
+
+// ---------------------------------------------------------------- UI: mapping
+function renderMap(){
+  const sh=S.sheets[S.cur]; const box=$('#errBox');
+  if(!sh){$('#mapBody').innerHTML='';return}
+  const det=sh.det, m=effMap(sh), miss=missReq(sh);
+  const rows=fullRows(sh);
+  $('#mapChips').innerHTML=`<span class="chip">dòng tiêu đề <b>${det.hr+1}</b></span><span class="chip"><b>${fmt(Math.max(0,rows.length-det.hr-1))}</b> dòng dữ liệu</span><span class="chip">khớp <b>${det.score}/${S.dict.length}</b> cột từ điển</span>`;
+  const opts=det.cols.map(c=>`<option value="${c}">${esc(det.raw[c]??String((sh.top[det.hr]||[])[c]))} · cột ${colLetter(c+1)}</option>`).join('');
+  let h='';
+  for(const t of [...IMPORT_HEADERS,...HELPERS]){
+    const [st,lvl]=mapStatus(t,sh); const d=dictOf(t);
+    const auto=det.auto[t]||[]; const ov=sh.override[t];
+    const autoTxt=auto.length?'Tự động: '+auto.map(c=>det.raw[c]).join(' → '):'Tự động: (không tìm thấy)';
+    const computed=t==='UnitDiaInch'||t==='TotalDiaInch';
+    const sel=computed?'<span class="muted">—</span>':`<select data-t="${t}" class="${ov!==undefined?'manual':''}" aria-label="Cột nguồn cho ${t}"><option value="auto">${esc(autoTxt)}</option><option value="-1">— không dùng —</option>${opts}</select>`;
+    h+=`<tr class="${HELPERS.includes(t)?'helper':''} ${lvl==='req'?'req':''}"><td class="t">${esc(labelOf(t))}${d.req?' <span class="pill req" style="font-size:10.5px;padding:0 5px">bắt buộc</span>':''}</td><td>${sel}</td><td><span class="pill ${lvl}">${esc(st)}</span></td></tr>`;
+  }
+  $('#mapBody').innerHTML=h;
+  for(const s of document.querySelectorAll('#mapBody select')){const ov=sh.override[s.dataset.t];s.value=ov===undefined?'auto':String(ov)}
+  // rail
+  $('#inHdr').value=det.hr+1;
+  $('#selSize').value=sh.sizeMode; $('#sizeHint').textContent='Tự đoán: '+sh.sizeWhy;
+  $('#selPipe').value=sh.pipeMode;
+  const hasSys=m.System.length>0; $('#inSys').disabled=hasSys; $('#inSys').value=hasSys?0:sh.sysPart;
+  sysPreview();
+  let ch='';
+  for(const c of CODE_COLS){const have=m[c].length>0;ch+=`<div class="row"><span>${c}</span><input id="const-${c}" data-c="${c}" class="inp ${have?'':'need'}" placeholder="${have?'có trong file':'nhập giá trị…'}" value="${esc(sh.consts?.[c]??'')}"></div>`}
+  $('#consts').innerHTML=ch;
+  // banners
+  const others=S.sheets.filter((x,i)=>i!==S.cur&&missReq(x).length===0).map(x=>x.name);
+  $('#sheetHint').textContent=others.length?`Lưu ý: còn ${others.length} sheet khác cũng map được (${others.join(', ')}). Kiểm tra đúng sheet dữ liệu gốc chưa.`:'';
+  if(miss.length){
+    const found=det.cols.map(c=>det.raw[c]).filter(Boolean).slice(0,60);
+    box.innerHTML=`<h3>Không map được file này${S.sheets.length>1?` (sheet “${esc(sh.name)}”)`:''}</h3>
+    <p>Thiếu cột bắt buộc:</p><ul>${miss.map(t=>`<li><b>${t}</b>: cần 1 trong các tên <code>${esc(synList(dictOf(t)).join('; ')||'(chưa khai báo)')}</code></li>`).join('')}</ul>
+    <p>Các cột tìm thấy ở dòng ${det.hr+1}: <span class="mono" style="font-size:12.5px">${esc(found.join(', '))}</span></p>
+    <p>Cách xử lý: nếu file có cột tương ứng nhưng tên khác, chọn tay cột đó trong bảng bên dưới, hoặc thêm tên vào tab <b>Từ điển cột</b>. Nếu dữ liệu ở sheet khác, đổi sheet.</p>`;
+    box.hidden=false; $('#btnRun').disabled=true;
+  } else {box.hidden=true; $('#btnRun').disabled=false}
+}
+function sysPreview(){
+  const sh=S.sheets[S.cur]; if(!sh) return; const m=effMap(sh);
+  const rows=fullRows(sh); const c=m.Line_No[0];
+  let ln=''; for(let r=sh.det.hr+1;r<Math.min(rows.length,sh.det.hr+30)&&c!=null;r++){ln=str((rows[r]||[])[c]);if(ln)break}
+  if(m.System.length){$('#sysPrev').innerHTML=`System lấy từ cột <b>${esc(sh.det.raw[m.System[0]]??'')}</b>`;return}
+  const n=+$('#inSys').value||0;
+  if(!n){$('#sysPrev').innerHTML=`Ví dụ Line_No: ${esc(ln)||'—'}<br>System sẽ để trống`;return}
+  const p=ln.split('-'); $('#sysPrev').innerHTML=`${esc(ln)} → System = <b>${esc(p.length>=n?p[n-1].trim():'(không có)')}</b>`;
+}
+function fillSheetSelect(){
+  $('#selSheet').innerHTML=S.sheets.map((sh,i)=>{const mr=missReq(sh);return`<option value="${i}">${esc(sh.name)} — ${mr.length?'thiếu cột bắt buộc':sh.det.score+' cột khớp'}</option>`}).join('');
+  $('#selSheet').value=S.cur;
+}
+function pickDefault(){
+  let best=-1,score=-1;
+  S.sheets.forEach((sh,i)=>{const ok=missReq(sh).length===0;const sc=(ok?1000:0)+sh.det.score;if(sc>score){score=sc;best=i}});
+  return best;
+}
+function prepareSheet(sh){detect(sh);guessModes(sh)}
+
+async function loadFile(file){
+  $('#fname').textContent=file.name; $('#fmeta').innerHTML='<span class="spin"></span> Đang đọc file…';
+  $('#result').hidden=true; S.result=null; await tick();
+  try{
+    const t0=performance.now();
+    const wb=await readWorkbook(file);
+    const sheets=sheetsFrom(wb);
+    if(!sheets.length) throw new Error('File không có sheet nào chứa dữ liệu.');
+    S.file={name:file.name,size:file.size}; S.sheets=sheets; S.sample=false;
+    sheets.forEach(sh=>detect(sh));
+    S.cur=pickDefault(); prepareSheet(S.sheets[S.cur]);
+    $('#sampleNote').hidden=true;
+    $('#fmeta').textContent=`${(file.size/1048576).toFixed(1)} MB · ${sheets.length} sheet · đọc trong ${((performance.now()-t0)/1000).toFixed(1)} s`;
+    fillSheetSelect(); renderMap(); $('#runMsg').textContent='Sẵn sàng';
+  }catch(e){
+    $('#fmeta').textContent='Không đọc được file: '+e.message;
+    toast('Không đọc được file. Kiểm tra file có đang được bảo vệ mật khẩu hoặc bị hỏng không.');
+  }
+}
+function loadSample(){
+  const sh={name:'Ví dụ',ws:null,top:SAMPLE_ROWS,nrows:SAMPLE_ROWS.length,rows:SAMPLE_ROWS,override:{},hdrFixed:null,sysPart:2,consts:{ProjectCode:'PKMD2515'}};
+  S.file={name:'vi-du-AVEVA.xlsx',size:0}; S.sheets=[sh]; S.cur=0; S.sample=true; prepareSheet(sh); sh.sysPart=2;
+  fillSheetSelect(); renderMap();
+}
+
+// ---------------------------------------------------------------- convert
+async function convert(sh,onProg){
+  const m=effMap(sh), rows=fullRows(sh), hr=sh.det.hr;
+  const tcols=IMPORT_HEADERS.map(t=>m[t]);
+  const cLen=m._LENGTH_MM, cDE=m._DE_UNITDIA, cSpec=m._SPEC, hasDE=cDE.length>0;
+  const sizeF=sh.sizeMode==='mm25'?S.cfg.mm25:1, pipeMm=sh.pipeMode==='mm';
+  const mapSys=m.System.length>0, sysPart=mapSys?0:(sh.sysPart||0), consts=sh.consts||{};
+  const skip=new Set(String(S.cfg.skip||'').split(';').map(s=>s.trim().toUpperCase()).filter(Boolean));
+  const fab=S.fab; const recs=[]; const skipped={}; const st={Khop:0,Lech:0,ThieuTypical:0,ThieuDE:0,Fab1:0};
+  const codeIdx=CODE_COLS.map(c=>IMPORT_HEADERS.indexOf(c));
+  const combos=new Map(); let pinkRows=0;
+  const total=rows.length-hr-1;
+  for(let r=hr+1;r<rows.length;r++){
+    if((r-hr)%4000===0){onProg((r-hr)/total);await tick()}
+    const src=rows[r]; if(!src) continue;
+    const rec=new Array(36).fill(null);
+    for(let i=0;i<36;i++){for(const c of tcols[i]){const x=str(src[c]);if(x!==''){rec[i]=x;break}}}
+    const cat=String(rec[9]??'').toUpperCase();
+    if(!cat){if(rec.some(x=>x!=null))skipped['(MaterialCategory trống)']=(skipped['(MaterialCategory trống)']||0)+1;continue}
+    if(skip.has(cat)){skipped[cat]=(skipped[cat]||0)+1;continue}
+    rec[9]=cat;
+    if(rec[8]!=null)rec[8]=rec[8].replace(/^\/+/,'');
+    for(let i=12;i<=14;i++){let x=sizeNum(rec[i]);if(x!=null&&sizeF!==1)x=r2(x*sizeF);rec[i]=x}
+    const f=fab[cat]!=null?fab[cat]:num(rec[26]); rec[26]=f;
+    if(f===2){
+      let len=null;for(const c of cLen){len=num(src[c]);if(len!=null)break}
+      let q=len!=null?len/1000:num(rec[18]); if(len==null&&q!=null&&pipeMm)q=q/1000;
+      rec[18]=q!=null?r6(q):null; if(rec[19]==null)rec[19]='m';
+    } else {rec[18]=num(rec[18]);if(rec[19]==null)rec[19]='pcs'}
+    for(const i of [22,23,34]){if(rec[i]!=null){const n=num(rec[i]);if(n!=null)rec[i]=n}}
+    if(sysPart>0&&rec[5]==null&&rec[4]!=null){const p=String(rec[4]).split('-');if(p.length>=sysPart){const v=p[sysPart-1].trim();if(v)rec[5]=v}}
+    if(rec[25]==null){let sp='';for(const c of cSpec){sp=str(src[c]);if(sp)break}rec[25]=/APE/i.test(sp)?'Non metalic':'Metalic'}
+    else if(rec[25]==='Nonmetalic')rec[25]='Non metalic';
+    CODE_COLS.forEach((c,k)=>{const i=codeIdx[k];if(rec[i]==null&&consts[c])rec[i]=consts[c]});
+    const o={row:rec,typ:null,de:null,st:'',miss:null};
+    if(f===1){
+      st.Fab1++;
+      const u=TYP.has(sizeKey(cat,[rec[12],rec[13],rec[14]]))?TYP.get(sizeKey(cat,[rec[12],rec[13],rec[14]])):null;
+      o.typ=u;rec[20]=u;rec[21]=(u!=null&&rec[18]!=null)?r6(rec[18]*u):null;
+      let de=null;for(const c of cDE){de=num(src[c]);if(de!=null)break} o.de=de;
+      const flags=[];
+      if(u==null){flags.push(MISS_TYP);o.st='ThieuTypical'}
+      if(hasDE&&de==null){flags.push(MISS_DE);if(!o.st)o.st='ThieuDE'}
+      if(!o.st&&hasDE)o.st=Math.abs(u-de)<1e-9?'Khop':'Lech';
+      if(o.st)st[o.st]++;
+      if(flags.length)rec[27]=[String(rec[27]??'').trim(),...flags].filter(Boolean).join('; ');
+      if(o.st==='Lech'||o.st==='ThieuTypical'){
+        const k=[cat,rec[12],rec[13],rec[14],o.st].join('|');let g=combos.get(k);
+        if(!g){g={cat,s:[rec[12],rec[13],rec[14]],typ:u,de:new Set(),st:o.st,n:0};combos.set(k,g)}
+        g.n++;if(de!=null)g.de.add(de);
+      }
+    } else {rec[20]=0;rec[21]=0}
+    const miss=PINK_IDX.filter(i=>rec[i]==null||rec[i]==='');if(miss.length){o.miss=miss;pinkRows++}
+    recs.push(o);
+  }
+  onProg(1);
+  return {recs,st,skipped,hasDE,pinkRows,combos:[...combos.values()].sort((a,b)=>b.n-a.n),
+    info:{file:S.file.name,sheet:sh.name,hr:hr+1,sizeMode:sh.sizeMode,pipeMode:sh.pipeMode,cLen:cLen.length>0,mapSys,sysPart,consts,mapRows:[...IMPORT_HEADERS,...HELPERS].map(t=>{const[s,l,src]=mapStatus(t,sh);return[labelOf(t),src||'',s,l]})}};
+}
+
+// ---------------------------------------------------------------- xlsx writer (true blanks keep their fill)
+const XML_HEAD='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+const xesc=s=>String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// fills: 0 none,1 gray125,2 yellow,3 orange,4 pink,5 grey,6 teal(light)  fonts: 0 normal,1 bold,2 bold red
+const FILL_KEYS=[0,2,3,4,5,6], FONT_N=3;
+const xf=(fill,font)=>FILL_KEYS.indexOf(fill)*FONT_N+font;
+function stylesXml(){
+  const fills=['<fill><patternFill patternType="none"/></fill>','<fill><patternFill patternType="gray125"/></fill>'];
+  for(const rgb of ['FFFFFF00','FFFFC000','FFFFC7CE','FFCCCCCC','FFD9EEEC']) fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`);
+  const fonts='<font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FFFF0000"/><name val="Calibri"/><family val="2"/></font>';
+  let xfs='';for(const f of FILL_KEYS)for(let fo=0;fo<FONT_N;fo++)xfs+=`<xf numFmtId="0" fontId="${fo}" fillId="${f}" borderId="0" xfId="0"${f?' applyFill="1"':''}${fo?' applyFont="1"':''}/>`;
+  return XML_HEAD+`<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3">${fonts}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${FILL_KEYS.length*FONT_N}">${xfs}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+}
+function concatBytes(chunks){let n=0;for(const c of chunks)n+=c.length;const out=new Uint8Array(n);let o=0;for(const c of chunks){out.set(c,o);o+=c.length}return out}
+function newSst(){return{map:new Map(),list:[],count:0}}
+function sstIdx(sst,v){const k=String(v);sst.count++;let i=sst.map.get(k);if(i===undefined){i=sst.list.length;sst.map.set(k,i);sst.list.push(k)}return i}
+function sheetXml(nrows,ncols,cellAt,styleAt,widths,freeze,sst){
+  const enc=new TextEncoder(), chunks=[]; let buf=[];
+  const flush=()=>{if(buf.length){chunks.push(enc.encode(buf.join('')));buf=[]}};
+  const L=[];for(let c=0;c<ncols;c++)L.push(colLetter(c+1));
+  buf.push(XML_HEAD+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">');
+  buf.push(`<dimension ref="A1:${L[ncols-1]}${nrows}"/>`);
+  buf.push(`<sheetViews><sheetView workbookViewId="0">${freeze?'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/>':''}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>`);
+  buf.push('<cols>'+widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols><sheetData>');
+  for(let r=0;r<nrows;r++){
+    let row=`<row r="${r+1}">`;
+    for(let c=0;c<ncols;c++){
+      const v=cellAt(r,c), s=styleAt(r,c), ref=L[c]+(r+1), sa=s?` s="${s}"`:'';
+      if(v==null||v===''){if(s)row+=`<c r="${ref}"${sa}/>`}
+      else if(typeof v==='number'&&isFinite(v))row+=`<c r="${ref}"${sa}><v>${v}</v></c>`;
+      else row+=`<c r="${ref}"${sa} t="s"><v>${sstIdx(sst,v)}</v></c>`;
+    }
+    buf.push(row+'</row>');
+    if(buf.length>=2000)flush();
+  }
+  buf.push('</sheetData></worksheet>'); flush();
+  return concatBytes(chunks);
+}
+function sstXml(sst){
+  const enc=new TextEncoder(), chunks=[]; let buf=[XML_HEAD+`<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.count}" uniqueCount="${sst.list.length}">`];
+  for(const s of sst.list){buf.push(`<si><t xml:space="preserve">${xesc(s)}</t></si>`);if(buf.length>=5000){chunks.push(enc.encode(buf.join('')));buf=[]}}
+  buf.push('</sst>'); chunks.push(enc.encode(buf.join(''))); return concatBytes(chunks);
+}function buildXlsx(sheets,sst){ // sheets: [{name, xml:Uint8Array}] sharing one sst
+  const enc=new TextEncoder(); const cfb=XLSX.CFB.utils.cfb_new();
+  const add=(p,s)=>XLSX.CFB.utils.cfb_add(cfb,p,typeof s==='string'?enc.encode(s):s);
+  add('[Content_Types].xml',XML_HEAD+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'+sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')+'</Types>');
+  add('_rels/.rels',XML_HEAD+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  add('xl/workbook.xml',XML_HEAD+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>'+sheets.map((s,i)=>`<sheet name="${xesc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')+'</sheets></workbook>');
+  const n=sheets.length;
+  add('xl/_rels/workbook.xml.rels',XML_HEAD+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')+`<Relationship Id="rId${n+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${n+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`);
+  add('xl/styles.xml',stylesXml());
+  add('xl/sharedStrings.xml',sstXml(sst));
+  sheets.forEach((s,i)=>add(`xl/worksheets/sheet${i+1}.xml`,s.xml));
+  return new Uint8Array(XLSX.CFB.write(cfb,{fileType:'zip',type:'array',compression:true}));
+}function simpleSheet(aoa,widths,boldRows,sst){
+  const nc=Math.max(...aoa.map(r=>r.length));
+  return sheetXml(aoa.length,nc,(r,c)=>aoa[r][c],(r,c)=>boldRows.has(r)?(r===0?xf(5,1):xf(0,1)):0,widths,true,sst);
+}
+function buildImportFile(res){
+  const {recs,hasDE}=res; const nc=hasDE?38:37; const n=recs.length;
+  const hdr=[...IMPORT_HEADERS,'UnitDiaInch (Typical) - xóa trước khi nạp'];if(hasDE)hdr.push('UnitDiaInch (file nguồn) - xóa trước khi nạp');
+  const pinkSets=recs.map(o=>o.miss?new Set(o.miss):null);
+  const cellAt=(r,c)=>{if(r===0)return hdr[c];const o=recs[r-1];if(c<36)return o.row[c];if(o.row[26]!==1)return null;return c===36?o.typ:o.de};
+  const styleAt=(r,c)=>{
+    if(r===0)return c>=36?xf(5,1):xf(0,1);
+    const o=recs[r-1]; let fill=0;
+    if(o.st==='ThieuTypical'||o.st==='ThieuDE')fill=2;else if(o.st==='Lech')fill=3;
+    if(c<36&&pinkSets[r-1]&&pinkSets[r-1].has(c))fill=4;
+    const font=(c===27&&o.row[27]!=null)?2:0;
+    return(fill||font)?xf(fill,font):0;
+  };
+  const widths=hdr.map((h,c)=>{let w=String(h).length;for(let i=0;i<Math.min(n,400);i++){const v=recs[i].row[c];if(v!=null)w=Math.max(w,String(v).length)}return Math.min(Math.max(w+2,8),c>=36?24:48)});
+  const sst=newSst();
+  const imp=sheetXml(n+1,nc,cellAt,styleAt,widths,true,sst);
+  const I=res.info, sk=Object.entries(res.skipped).map(([k,v])=>`${k} = ${v}`).join(', ')||'0';
+  const cst=Object.entries(I.consts).filter(([,v])=>v).map(([k,v])=>`${k} = ${v}`).join(', ')||'(không)';
+  const aoa=[['Cột đích (Import)','Cột nguồn trong file','Xử lý'],...I.mapRows.map(r=>r.slice(0,3)),[],
+    ['TÓM TẮT'],['File nguồn',I.file],['Sheet / dòng tiêu đề',`${I.sheet} / dòng ${I.hr}`],
+    ['Size trong file',I.sizeMode==='mm25'?`mm/25 → đã nhân ${S.cfg.mm25}`:'mm'],
+    ['Số lượng ống',(I.cLen?'chiều dài (mm) / 1000; không có chiều dài thì ':'')+(I.pipeMode==='mm'?'Quantity / 1000':'Quantity giữ nguyên (m)')],
+    ['System',I.mapSys?'lấy từ cột trong file':(I.sysPart>0?`phần thứ ${I.sysPart} của Line_No`:'không có - để trống')],
+    ['Giá trị điền khi trống',cst],['Typical',`${TYP.size} tổ hợp · ${S.typ.src}`],['Số dòng xuất',n],['Dòng bỏ qua',sk],
+    ['Fab 1 (fitting)',res.st.Fab1],['  Thiếu trong Typical (vàng)',res.st.ThieuTypical],
+    ['  Lệch so với file nguồn (cam)',hasDE?res.st.Lech:'không đối chiếu (file không có UnitDiaInch)'],['  Khớp',hasDE?res.st.Khop:'-'],
+    ['  Thiếu giá trị trong file nguồn (vàng)',hasDE?res.st.ThieuDE:'-'],
+    ['Dòng có ô quan trọng bị trống (hồng)',res.pinkRows,'ProjectCode, GroupFacilityCode, FacilityCode, IsSubContractor, Line_No, System, Quantity, Scope, FabricationType']];
+  const nMap=I.mapRows.length; const lv=I.mapRows.map(r=>r[3]);
+  const mapXml=sheetXml(aoa.length,3,(r,c)=>(aoa[r]||[])[c],(r,c)=>{if(r===0)return xf(5,1);if(r===nMap+2)return xf(0,1);if(r>=1&&r<=nMap){const l=lv[r-1];return l==='warn'?xf(2,0):l==='req'?xf(4,0):l==='auto'||l==='man'?xf(6,0):0}return 0},[40,60,70],true,sst);
+  return buildXlsx([{name:'Import',xml:imp},{name:'Map',xml:mapXml}],sst);
+}
+
+// ---------------------------------------------------------------- save file
+let DL=null;
+(async()=>{try{if(window.claude&&window.claude.use)DL=await window.claude.use('downloads')}catch(e){DL=null}})();
+async function saveFile(name,bytes){
+  if(DL){
+    try{await DL.save({filename:name,data:new Blob([bytes])});toast('Đã lưu '+name)}
+    catch(e){toast(e&&e.code==='declined'?'Đã hủy lưu file.':'Không lưu được file: '+(e&&e.message||e))}
+    return;
+  }
+  if(window.showSaveFilePicker){ // local / exe: let the user pick the folder
+    try{
+      const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'Excel',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});
+      const w=await h.createWritable(); await w.write(new Blob([bytes])); await w.close(); toast('Đã lưu '+h.name); return;
+    }catch(e){ if(e&&e.name==='AbortError'){toast('Đã hủy lưu file.');return} }
+  }
+  const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+
+// ---------------------------------------------------------------- run
+async function run(){
+  const sh=S.sheets[S.cur]; if(!sh||missReq(sh).length) return;
+  readRail(sh);
+  $('#btnRun').disabled=true; $('#result').hidden=true; $('#runMsg').textContent='Đang convert…';
+  const prog=$('#prog'); prog.style.width='0';
+  try{
+    const t0=performance.now();
+    const res=await convert(sh,p=>{prog.style.width=(p*100).toFixed(1)+'%'});
+    if(!res.recs.length) throw new Error('Không có dòng dữ liệu nào để xuất (sau khi bỏ dòng trống / loại bỏ qua).');
+    $('#runMsg').textContent='Đang tạo file Excel…'; await tick();
+    res.bytes=buildImportFile(res);
+    S.result=res; renderResult(res);
+    $('#runMsg').textContent=`Xong · ${fmt(res.recs.length)} dòng · ${((performance.now()-t0)/1000).toFixed(1)} s`;
+  }catch(e){$('#runMsg').textContent='Lỗi: '+e.message;toast('Lỗi khi convert: '+e.message)}
+  finally{$('#btnRun').disabled=false}
+}
+function outName(){const b=(S.file?.name||'file').replace(/\.[^.]+$/,'');return b+' - Import.xlsx'}
+function renderResult(res){
+  const t=[[fmt(res.recs.length),'Số dòng xuất',''],[fmt(res.st.Fab1),'Fab 1 (fitting)',''],
+    [res.hasDE?fmt(res.st.Lech):'—',res.hasDE?'Lệch UnitDiaInch so với file':'File không có UnitDiaInch để đối chiếu','o'],
+    [fmt(res.st.ThieuTypical),'Thiếu trong NEW Typical','y'],[fmt(res.pinkRows),'Dòng có ô quan trọng trống','p'],
+    [fmt(Object.values(res.skipped).reduce((a,b)=>a+b,0)),'Dòng bỏ qua'+(Object.keys(res.skipped).length?' ('+Object.keys(res.skipped).join(', ')+')':''),'']];
+  $('#tiles').innerHTML=t.map(([n,k,sw])=>`<div class="tile"><span class="n">${n}</span><span class="k">${sw?`<span class="sw ${sw}"></span>`:''}${esc(k)}</span></div>`).join('');
+  $('#saveHint').textContent=`${outName()} · ${(res.bytes.length/1048576).toFixed(1)} MB · sheet Import + Map · xóa cột AK trở đi trước khi nạp hệ thống`;
+  const rows=res.combos.slice(0,300);
+  $('#comboTitle').textContent=rows.length?`Tổ hợp lệch / thiếu trong NEW Typical (${fmt(res.combos.length)})`:'Không có tổ hợp lệch hoặc thiếu trong NEW Typical';
+  const lab={Lech:'<span class="pill warn">Lệch</span>',ThieuTypical:'<span class="pill req">Thiếu Typical</span>'};
+  $('#comboBody').innerHTML=rows.map(g=>`<tr><td>${esc(g.cat)}</td>${g.s.map(x=>`<td class="num">${x??''}</td>`).join('')}<td class="num">${g.typ??'—'}</td><td class="num">${[...g.de].sort((a,b)=>a-b).join('; ')||'—'}</td><td>${lab[g.st]}</td><td class="num">${fmt(g.n)}</td></tr>`).join('');
+  $('#result').hidden=false;
+}
+function readRail(sh){
+  sh.sizeMode=$('#selSize').value; sh.pipeMode=$('#selPipe').value; sh.sysPart=+$('#inSys').value||0;
+  sh.consts={};for(const i of document.querySelectorAll('#consts input'))sh.consts[i.dataset.c]=i.value.trim();
+}
+
+// ---------------------------------------------------------------- dictionary & settings UI
+function saveDict(){ls('dict',S.dict);remapAll()}
+function remapAll(){if(!S.sheets.length)return;const sh=S.sheets[S.cur];readRail(sh);S.sheets.forEach(x=>detect(x));fillSheetSelect();renderMap()}
+function renderDict(){
+  $('#dictBody').innerHTML=S.dict.map((d,i)=>`<tr class="${HELPERS.includes(d.t)?'helper':''}"><td class="t">${esc(labelOf(d.t))}</td><td><input type="text" id="dsyn-${i}" data-i="${i}" data-k="syn" value="${esc(d.syn)}" ${d.t==='UnitDiaInch'||d.t==='TotalDiaInch'?'disabled placeholder="tool tự tính"':''} aria-label="Tên cột nguồn cho ${d.t}"></td><td class="c"><input type="checkbox" id="dreq-${i}" data-i="${i}" data-k="req" ${d.req?'checked':''} aria-label="Bắt buộc"></td><td class="c"><input type="checkbox" id="dfb-${i}" data-i="${i}" data-k="fb" ${d.fb?'checked':''} aria-label="Ô trống lấy cột kế"></td><td class="note">${esc(d.note)}</td></tr>`).join('');
+}
+function renderSettings(){
+  $('#cfgSkip').value=S.cfg.skip; $('#cfgMm25').value=S.cfg.mm25;
+  $('#fabGrid').innerHTML=Object.keys(S.fab).sort().map(k=>`<label>${esc(k)}<input type="number" min="1" max="5" data-cat="${esc(k)}" value="${S.fab[k]}" aria-label="FabricationType ${esc(k)}"></label>`).join('');
+}
+async function importDict(file){
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const td=wb.Sheets.TuDien; if(!td) throw new Error('không có sheet TuDien');
+    const rows=XLSX.utils.sheet_to_json(td,{header:1,defval:null}).slice(1).filter(r=>r[0]);
+    const nd=rows.map(r=>({t:String(r[0]).trim(),syn:String(r[1]??''),req:!!String(r[2]??'').trim(),fb:!!String(r[4]??'').trim(),note:String(r[3]??'')}));
+    for(const d of DEFAULT_DICT) if(!nd.find(x=>x.t===d.t)) nd.push(structuredClone(d));
+    S.dict=nd;
+    if(wb.Sheets.CaiDat){for(const r of XLSX.utils.sheet_to_json(wb.Sheets.CaiDat,{header:1,defval:null})){if(r[0]==='SkipCategory')S.cfg.skip=String(r[1]??'');if(r[0]==='Mm25Factor'&&num(r[1]))S.cfg.mm25=num(r[1])}ls('cfg',S.cfg)}
+    if(wb.Sheets.FabType){const f={};for(const r of XLSX.utils.sheet_to_json(wb.Sheets.FabType,{header:1,defval:null}).slice(1)){if(r[0]&&num(r[1])!=null)f[String(r[0]).trim().toUpperCase()]=num(r[1])}if(Object.keys(f).length){S.fab=f;ls('fab',f)}}
+    renderDict();renderSettings();saveDict();toast(`Đã nạp từ điển: ${nd.length} dòng`);
+  }catch(e){toast('Không nạp được từ điển: '+e.message)}
+}
+function exportDict(){
+  const a1=[['Cột đích (Import)','Tên cột nguồn có thể gặp (cách nhau bằng ;)','Bắt buộc (x)','Ghi chú / cách xử lý','Ô trống thì lấy cột kế tiếp (x)'],...S.dict.map(d=>[d.t,d.syn,d.req?'x':'',d.note,d.fb?'x':''])];
+  const a2=[['Khóa (không sửa)','Giá trị','Ghi chú'],['TypicalFile','..\\Input\\Working_Nguyen.xlsx','File chứa sheet NEW Typical (tool PowerShell)'],['TypicalSheet','NEW Typical','Tên sheet Typical'],['SkipCategory',S.cfg.skip,'MaterialCategory bỏ qua (cách nhau bằng ;)'],['Mm25Factor',S.cfg.mm25,'Hệ số khi size ghi dạng mm/25']];
+  const a3=[['MaterialCategory','FabricationType'],...Object.keys(S.fab).sort().map(k=>[k,S.fab[k]])];
+  const one=new Set([0]), sst=newSst();
+  saveFile('TuDien_Cot.xlsx',buildXlsx([{name:'TuDien',xml:simpleSheet(a1,[20,60,11,60,16],one,sst)},{name:'CaiDat',xml:simpleSheet(a2,[16,34,60],one,sst)},{name:'FabType',xml:simpleSheet(a3,[18,16],one,sst)}],sst));
+}
+async function importTypical(file){
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const name=wb.SheetNames.find(n=>n.trim().toUpperCase()==='NEW TYPICAL'); if(!name) throw new Error('không có sheet "NEW Typical"');
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null}).slice(1).filter(r=>r[0]).map(r=>r.slice(0,8));
+    S.typ={rows,src:`${file.name} (nạp ${new Date().toLocaleDateString('vi-VN')})`}; ls('typ',S.typ); buildTypical(); remapAll(); toast(`Đã cập nhật NEW Typical: ${TYP.size} tổ hợp`);
+  }catch(e){toast('Không đọc được Typical: '+e.message)}
+}
+
+// ---------------------------------------------------------------- events
+document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+function showTab(t){document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));for(const s of ['convert','str','eit','lookup','dict','settings'])$('#sec-'+s).hidden=s!==t;ls('tab',t)}
+const drop=$('#drop');
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{const f=ev.dataTransfer.files[0];if(f)loadFile(f)});
+$('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadFile(f);e.target.value=''});
+$('#selSheet').addEventListener('change',e=>{readRail(S.sheets[S.cur]);S.cur=+e.target.value;const sh=S.sheets[S.cur];if(!sh.sizeMode)guessModes(sh);renderMap()});
+$('#inHdr').addEventListener('change',e=>{const sh=S.sheets[S.cur];if(!sh)return;readRail(sh);const v=Math.min(10,Math.max(1,+e.target.value||1));sh.hdrFixed=v-1;sh.override={};detect(sh);guessModes(sh);fillSheetSelect();renderMap()});
+$('#mapBody').addEventListener('change',e=>{const s=e.target.closest('select');if(!s)return;const sh=S.sheets[S.cur];readRail(sh);if(s.value==='auto')delete sh.override[s.dataset.t];else sh.override[s.dataset.t]=+s.value;fillSheetSelect();renderMap()});
+$('#inSys').addEventListener('input',sysPreview);
+$('#btnRun').addEventListener('click',run);
+$('#btnSave').addEventListener('click',()=>{if(S.result)saveFile(outName(),S.result.bytes)});
+$('#dictBody').addEventListener('change',e=>{const i=e.target.dataset.i;if(i==null)return;const d=S.dict[+i];const k=e.target.dataset.k;d[k]=k==='syn'?e.target.value:e.target.checked;saveDict()});
+$('#dictReset').addEventListener('click',()=>{S.dict=structuredClone(DEFAULT_DICT);lsDel('dict');renderDict();remapAll();toast('Đã khôi phục từ điển mặc định')});
+$('#dictLoad').addEventListener('click',()=>$('#dictFile').click());
+$('#dictFile').addEventListener('change',e=>{const f=e.target.files[0];if(f)importDict(f);e.target.value=''});
+$('#dictSave').addEventListener('click',exportDict);
+$('#typLoad').addEventListener('click',()=>$('#typFile').click());
+$('#typFile').addEventListener('change',e=>{const f=e.target.files[0];if(f)importTypical(f);e.target.value=''});
+$('#typReset').addEventListener('click',()=>{S.typ={rows:TYPICAL,src:'bản nhúng sẵn (NEW Typical 2026-10-12)'};lsDel('typ');buildTypical();remapAll();toast('Đang dùng NEW Typical nhúng sẵn')});
+$('#cfgSkip').addEventListener('change',e=>{S.cfg.skip=e.target.value;ls('cfg',S.cfg)});
+$('#cfgMm25').addEventListener('change',e=>{const v=num(e.target.value);if(v){S.cfg.mm25=v;ls('cfg',S.cfg);remapAll()}});
+$('#fabGrid').addEventListener('change',e=>{const c=e.target.dataset.cat;if(!c)return;const v=num(e.target.value);if(v==null)delete S.fab[c];else S.fab[c]=v;ls('fab',S.fab)});
+$('#fabAdd').addEventListener('click',()=>{const inp=document.createElement('label');inp.innerHTML='<input class="mono" placeholder="MÃ" aria-label="Category mới" style="grid-column:1/-1">';$('#fabGrid').prepend(inp);const i=inp.querySelector('input');i.focus();i.addEventListener('change',()=>{const k=i.value.trim().toUpperCase();if(k){S.fab[k]=1;ls('fab',S.fab);renderSettings();toast(`Đã thêm ${k} = 1, sửa số nếu cần`)}})});
+
+// ---------------------------------------------------------------- boot
+buildTypical(); renderDict(); renderSettings(); loadSample(); if(typeof window.__selftest!=='function') run();
+const lastTab=ls('tab'); if(lastTab&&lastTab!=='convert') showTab(lastTab);
+</script>
+<script>
+"use strict";
+/*MASTER*/
+</script>

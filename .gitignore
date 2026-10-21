@@ -1,0 +1,3 @@
+# build intermediates and self-test outputs
+src/build/
+~$*
